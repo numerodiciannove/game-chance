@@ -1,5 +1,7 @@
 import random
+from typing import Any, Type, Dict
 
+from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
@@ -27,7 +29,7 @@ class UserViewSet(GenericViewSet):
         description="Register a new user and return token",
     )
     @action(detail=False, methods=["post"], url_path="register")
-    def register(self, request):
+    def register(self, request) -> Response:
         serializer = UserRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -36,9 +38,7 @@ class UserViewSet(GenericViewSet):
             phone_number=serializer.validated_data["phone_number"],
         )
 
-        token = Token.objects.create(
-            user=user
-        )  # TODO Добавить хеширование через ключ из сеттингс
+        token = Token.objects.create(user=user)
 
         response_serializer = UserRegistrationResponseSerializer(
             instance={
@@ -55,7 +55,7 @@ class UserViewSet(GenericViewSet):
 class GameViewSet(GenericViewSet):
     serializer_class = UserInfoSerializer
 
-    def get_serializer_class(self):
+    def get_serializer_class(self) -> Any:
         if self.action == "renew":
             return TokenRenewResponseSerializer
         elif self.action == "play":
@@ -64,13 +64,13 @@ class GameViewSet(GenericViewSet):
             return GameResultSerializer
         return self.serializer_class
 
-    def get_token(self):
+    def get_token(self) -> Token:
         token_str = self.kwargs["token"]
         return get_object_or_404(
             Token, token=token_str, is_active=True, expires_at__gt=timezone.now()
         )
 
-    def get_user(self):
+    def get_user(self) -> User:
         token = self.get_token()
         return token.user
 
@@ -79,7 +79,7 @@ class GameViewSet(GenericViewSet):
             OpenApiParameter(
                 name="token",
                 type=str,
-                location=OpenApiParameter.PATH,  # убрал в свагере повтороное поле ввода параметров
+                location=OpenApiParameter.PATH,
                 description="Enter UUID token for get user info",
                 required=True,
             )
@@ -90,7 +90,7 @@ class GameViewSet(GenericViewSet):
         },
         description="Retrieve user information by valid token.",
     )
-    def retrieve(self, request, *args, **kwargs):
+    def retrieve(self, request, *args, **kwargs) -> Response:
         user = self.get_user()
         serializer = UserInfoSerializer(user)
         return Response(serializer.data)
@@ -115,14 +115,8 @@ class GameViewSet(GenericViewSet):
         Returns an error if another active token already exists for the user.""",
     )
     @action(detail=True, methods=["post"], url_path="renew")
-    def renew(self, request, *args, **kwargs):
-        """
-        Renews a user's token.
-        It deactivates the old token (if active) and creates a new one.
-        Returns an error if another active token already exists for the user.
-        """
+    def renew(self, request, *args, **kwargs) -> Response:
         token_str = self.kwargs.get("token")
-
         old_token = get_object_or_404(
             Token, token=token_str, expires_at__gt=timezone.now()
         )
@@ -176,7 +170,7 @@ class GameViewSet(GenericViewSet):
         description="Deactivate the current token.",
     )
     @action(detail=True, methods=["post"], url_path="deactivate")
-    def deactivate(self, request, *args, **kwargs):
+    def deactivate(self, request, *args, **kwargs) -> Response:
         token = self.get_token()
         token.is_active = False
         token.save()
@@ -199,7 +193,7 @@ class GameViewSet(GenericViewSet):
         description="Play a game: generate a random number, determine win/lose, and calculate prize.",
     )
     @action(detail=True, methods=["post"], url_path="play")
-    def play(self, request, *args, **kwargs):
+    def play(self, request, *args, **kwargs) -> Response:
         user = self.get_user()
         random_number = random.randint(1, 1000)
         is_win = random_number % 2 == 0
@@ -237,7 +231,7 @@ class GameViewSet(GenericViewSet):
         description="Retrieve the last 3 game results for the user.",
     )
     @action(detail=True, methods=["get"], url_path="history")
-    def history(self, request, *args, **kwargs):
+    def history(self, request, *args, **kwargs) -> Response:
         user = self.get_user()
         results = user.game_results.order_by("-created_at")[:3]
         serializer = GameResultSerializer(results, many=True)
@@ -260,7 +254,7 @@ class GameViewSet(GenericViewSet):
         description="Retrieve all tokens for a user for testing",
     )
     @action(detail=True, methods=["get"], url_path="all-tokens")
-    def all_tokens(self, request, *args, **kwargs):
+    def all_tokens(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Response:
         """
         Retrieves all tokens associated with a user, including active and inactive ones.
         This method is for testing and debugging purposes.
