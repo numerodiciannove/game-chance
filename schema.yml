@@ -1,0 +1,15 @@
+openapi: 3.0.3
+info:
+  title: '"Chance" Game API'
+  version: 1.0.0
+  description: Smile if you read it)
+paths:
+  /user/register:
+    post:
+      operationId: user_register_create
+      tags:
+      - user
+      responses:
+        '200':
+          description: No response body
+components: {}
