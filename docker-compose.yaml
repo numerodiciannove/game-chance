@@ -1,0 +1,17 @@
+services:
+  game_chance:
+    build: .
+    container_name: game_chance
+    command: python manage.py runserver 0.0.0.0:5044
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - game_chance_data:/app
+    ports:
+      - "5044:5044"
+    restart: always
+
+volumes:
+  game_chance_data:
+

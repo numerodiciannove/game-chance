@@ -1,19 +1,14 @@
-FROM python:3.10
-LABEL mainteiner="rmuraviov.dev@gmail.com"
+FROM python:3.10-slim
 
-ENV PYTHONUNBUFFERED=1
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc \
-    libmariadb-dev \
-    default-libmysqlclient-dev \
-    && rm -rf /var/lib/apt/lists/*
-RUN pip install --upgrade pip
-
-WORKDIR /191919
-COPY requirements.txt requirements.txt
-
-RUN pip install -r requirements.txt
-
+# Установка зависимостей
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+# Копируем проект
 COPY . .
+
+# Указываем рабочую директорию
+WORKDIR /app
+
+RUN python manage.py collectstatic --noinput
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
