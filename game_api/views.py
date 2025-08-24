@@ -7,6 +7,7 @@ from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 from rest_framework import status
 from rest_framework.decorators import action
+from rest_framework.exceptions import NotFound
 from rest_framework.response import Response
 from rest_framework.serializers import Serializer
 from rest_framework.viewsets import GenericViewSet
@@ -69,10 +70,19 @@ class GameViewSet(GenericViewSet):
         return self.serializer_class
 
     def get_token(self) -> Token:
-        token_str = self.kwargs["token"]
-        return get_object_or_404(
-            Token, token=token_str, is_active=True, expires_at__gt=timezone.now()
-        )
+        token_str = self.kwargs.get("token")
+        try:
+            token = Token.objects.get(token=token_str)
+        except Token.DoesNotExist:
+            raise NotFound({"message": "Token not found or invalid"})
+
+        if not token.is_active:
+            raise NotFound({"message": "Token is deactivated"})
+
+        if token.expires_at < timezone.now():
+            raise NotFound({"message": "Token has expired"})
+
+        return token
 
     def get_user(self) -> User:
         token = self.get_token()
@@ -102,17 +112,9 @@ class GameViewSet(GenericViewSet):
     @action(detail=True, methods=["post"], url_path="renew")
     def renew(self, request, *args, **kwargs) -> Response:
         token_str = self.kwargs.get("token")
-        old_token = get_object_or_404(
-            Token, token=token_str, expires_at__gt=timezone.now()
-        )
+        old_token = get_object_or_404(Token, token=token_str)
 
-        other_active_token_exists = (
-            Token.objects.filter(user=old_token.user, is_active=True)
-            .exclude(token=old_token.token)
-            .exists()
-        )
-
-        if other_active_token_exists:
+        if Token.objects.filter(user=old_token.user, is_active=True).exclude(token=old_token.token).exists():
             return Response(
                 {
                     "message": "You are using an old token. "

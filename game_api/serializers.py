@@ -8,7 +8,7 @@ from game_api.models import User, GameResult, Token
 
 class UserRegistrationSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=128)
-    phone_number = serializers.IntegerField()
+    phone_number = serializers.CharField(max_length=20)
 
     @staticmethod
     def validate_username(value):
@@ -23,16 +23,15 @@ class UserRegistrationSerializer(serializers.Serializer):
     def validate_phone_number(value):
         # TODO добавить валидацию через библиотеку phonenumbers
 
-        value_str = str(value)
 
-        if len(value_str) < 7:
+        if len(value) < 7:
             raise serializers.ValidationError(
-                f"Phone number must contain at least 7 digits (found {len(value_str)})."
+                f"Phone number must contain at least 7 digits (found {len(value)})."
             )
 
-        if len(value_str) > 20:
+        if len(value) > 20:
             raise serializers.ValidationError(
-                f"Phone number must contain max 20 digits (found {len(value_str)})."
+                f"Phone number must contain max 20 digits (found {len(value)})."
             )
 
         return value
