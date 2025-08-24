@@ -3,7 +3,7 @@ import re
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from game_api.models import User, GameResult
+from game_api.models import User, GameResult, Token
 
 
 class UserRegistrationSerializer(serializers.Serializer):
@@ -38,11 +38,22 @@ class UserRegistrationSerializer(serializers.Serializer):
         return value
 
 
-class UserRegistrationResponseSerializer(serializers.Serializer):
-    user_id = serializers.IntegerField()
-    username = serializers.CharField()
-    token = serializers.UUIDField()
-    token_expires_at = serializers.DateTimeField()
+class UserRegistrationResponseSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source="id", read_only=True)
+    token = serializers.SerializerMethodField()
+    token_expires_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["user_id", "username", "token", "token_expires_at"]
+
+    def get_token(self, obj):
+        token: Token = self.context.get("token")
+        return token.token if token else None
+
+    def get_token_expires_at(self, obj):
+        token: Token = self.context.get("token")
+        return token.expires_at if token else None
 
 
 class UserInfoSerializer(serializers.ModelSerializer):
@@ -51,10 +62,23 @@ class UserInfoSerializer(serializers.ModelSerializer):
         fields = ["id", "username", "phone_number"]
 
 
-class TokenRenewResponseSerializer(serializers.Serializer):
-    user_id = serializers.IntegerField()
-    token = serializers.UUIDField()
-    token_expires_at = serializers.DateTimeField()
+class TokenRenewResponseSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source="id", read_only=True)
+    token = serializers.SerializerMethodField()
+    token_expires_at = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["user_id", "token", "token_expires_at"]
+
+    def get_token(self, obj):
+        token: Token = self.context.get("token")
+        return token.token if token else None
+
+    def get_token_expires_at(self, obj):
+        token: Token = self.context.get("token")
+        return token.expires_at if token else None
+
 
 
 class GamePlayResponseSerializer(serializers.Serializer):
@@ -74,8 +98,3 @@ class GameResultSerializer(serializers.ModelSerializer):
     def get_result(self, obj):
         return "win" if obj.result else "lose"
 
-
-class AllTokensSerializer(serializers.Serializer):
-    token = serializers.UUIDField()
-    is_active = serializers.BooleanField()
-    expires_at = serializers.DateTimeField()

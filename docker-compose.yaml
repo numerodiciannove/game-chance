@@ -2,7 +2,7 @@ services:
   game_chance:
     build: .
     container_name: game_chance
-    command: python manage.py runserver 0.0.0.0:5044
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:5044"
     env_file:
       - .env
     volumes:
@@ -14,4 +14,3 @@ services:
 
 volumes:
   game_chance_data:
-

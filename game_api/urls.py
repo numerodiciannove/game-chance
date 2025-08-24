@@ -32,11 +32,6 @@ game_viewset_patterns = [
         GameViewSet.as_view({"get": "history"}),
         name="game-history",
     ),
-    path(
-        "game/<id>/test_get_user_all_tokens/",
-        GameViewSet.as_view({"get": "all_tokens"}),
-        name="game-get_all_tokens",
-    ),
 ]
 
 urlpatterns = [

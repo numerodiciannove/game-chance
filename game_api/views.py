@@ -1,13 +1,14 @@
 import random
-from typing import Any, Type, Dict
+from typing import Type
 
-from django.http import HttpRequest
+from django.db import transaction, IntegrityError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema, OpenApiResponse, OpenApiParameter
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.serializers import Serializer
 from rest_framework.viewsets import GenericViewSet
 
 from .models import User, Token, GameResult
@@ -17,45 +18,48 @@ from .serializers import (
     UserInfoSerializer,
     TokenRenewResponseSerializer,
     GamePlayResponseSerializer,
-    GameResultSerializer,
-    AllTokensSerializer,
+    GameResultSerializer
 )
 
 
 class UserViewSet(GenericViewSet):
     @extend_schema(
         request=UserRegistrationSerializer,
-        responses={201: UserRegistrationResponseSerializer},
-        description="Register a new user and return token",
+        responses={
+            201: UserRegistrationResponseSerializer,
+            400: OpenApiResponse(description="User with this username or phone number already exists"),
+        },
+        description="Register a new user and return token. Returns error if user already exists.",
     )
     @action(detail=False, methods=["post"], url_path="register")
     def register(self, request) -> Response:
         serializer = UserRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        user = User.objects.create(
-            username=serializer.validated_data["username"],
-            phone_number=serializer.validated_data["phone_number"],
-        )
+        username = serializer.validated_data["username"]
+        phone_number = serializer.validated_data["phone_number"]
 
-        token = Token.objects.create(user=user)
+        try:
+            with transaction.atomic():
+                user = User.objects.create(username=username, phone_number=phone_number)
+                token = Token.objects.create(user=user)
+        except IntegrityError:
+            return Response(
+                {"message": "User with this username or phone number already exists"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         response_serializer = UserRegistrationResponseSerializer(
-            instance={
-                "user_id": user.id,
-                "username": user.username,
-                "token": token.token,
-                "token_expires_at": token.expires_at,
-            }
+            instance=user,
+            context={"token": token}
         )
-
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class GameViewSet(GenericViewSet):
     serializer_class = UserInfoSerializer
 
-    def get_serializer_class(self) -> Any:
+    def get_serializer_class(self) -> Type[Serializer]:
         if self.action == "renew":
             return TokenRenewResponseSerializer
         elif self.action == "play":
@@ -95,25 +99,6 @@ class GameViewSet(GenericViewSet):
         serializer = UserInfoSerializer(user)
         return Response(serializer.data)
 
-    @extend_schema(
-        parameters=[
-            OpenApiParameter(
-                name="token",
-                type=str,
-                location=OpenApiParameter.PATH,
-                description="Enter UUID token for update",
-                required=True,
-            )
-        ],
-        responses={
-            200: TokenRenewResponseSerializer,
-            400: OpenApiResponse(description="Another active token already exists"),
-            404: OpenApiResponse(description="Invalid or expired token"),
-        },
-        description="""Renews a user's token.
-        It deactivates the old token (if active) and creates a new one.
-        Returns an error if another active token already exists for the user.""",
-    )
     @action(detail=True, methods=["post"], url_path="renew")
     def renew(self, request, *args, **kwargs) -> Response:
         token_str = self.kwargs.get("token")
@@ -131,7 +116,7 @@ class GameViewSet(GenericViewSet):
             return Response(
                 {
                     "message": "You are using an old token. "
-                    "You already have an active token for this user. Please use the active token to renew."
+                               "You already have an active token for this user. Please use the active token to renew."
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -142,15 +127,10 @@ class GameViewSet(GenericViewSet):
 
         new_token = Token.objects.create(user=old_token.user)
 
-        response_data = {
-            "user_id": old_token.user.id,
-            "token": new_token.token,
-            "token_expires_at": new_token.expires_at,
-        }
-
-        response_serializer = TokenRenewResponseSerializer(data=response_data)
-        response_serializer.is_valid(raise_exception=True)
-
+        response_serializer = TokenRenewResponseSerializer(
+            instance=old_token.user,
+            context={"token": new_token}
+        )
         return Response(response_serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
@@ -236,30 +216,3 @@ class GameViewSet(GenericViewSet):
         results = user.game_results.order_by("-created_at")[:3]
         serializer = GameResultSerializer(results, many=True)
         return Response(serializer.data)
-
-    @extend_schema(
-        parameters=[
-            OpenApiParameter(
-                name="id",
-                type=str,
-                location=OpenApiParameter.PATH,
-                description="User id for testing",
-                required=True,
-            )
-        ],
-        responses={
-            200: AllTokensSerializer(many=True),
-            404: OpenApiResponse(description="Invalid or expired token"),
-        },
-        description="Retrieve all tokens for a user for testing",
-    )
-    @action(detail=True, methods=["get"], url_path="all-tokens")
-    def all_tokens(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Response:
-        """
-        Retrieves all tokens associated with a user, including active and inactive ones.
-        This method is for testing and debugging purposes.
-        """
-        user = User.objects.get(id=kwargs["id"])
-        all_tokens = Token.objects.filter(user=user)
-        serializer = AllTokensSerializer(all_tokens, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
