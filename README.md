@@ -4,12 +4,6 @@
 
 # Game Chance API — Setup and Testing
 
-## Testing on VPS
-
-The project is already running on a VPS. You can test the API functionality using Swagger/OpenAPI:
-
-* Swagger UI: [http://185.230.88.82:5044/docs/](http://185.230.88.82:5044/docs/)
-* ReDoc: [http://185.230.88.82:5044/redoc/](http://185.230.88.82:5044/redoc/)
 
 ---
 
